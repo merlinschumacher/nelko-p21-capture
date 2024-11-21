@@ -11,10 +11,14 @@ It contains a connection and a print of the default template on a 14x40mm label.
   000003 corresponds to the first firmware version in the app (0.3.0).
   040204 corresponds to the second firmware version in the app (4.2.4).
   0201 at the end is unknown. It might be the automatic timeout and the beep feature.
-- `[ESC]!0`  
-  Purpose unknown
+- `[ESC]!o`  
+  According to the TSPL2 documentation this cancels the pause status of the printer. The command is sent repeatedly from the app to the printer and the printer answers with a short status.
+- `[ESC]!?`
+  Seems to return the ready status for the printer.
+ 
+  
 
-The sent printing commands correspond to TSPL2:
+The sent printing commands correspond to parts of TSPL2:
 ```
 SIZE 14.0 mm,40.0 mm
 GAP 5.0 mm,0 mm
@@ -24,6 +28,20 @@ CLS
 BITMAP 0,0,12,284,1,?????AT???GuC??
 ... [truncated]
 ```
+
+It only supports a subset of TSPL2 commands like:
+
+- SIZE
+- GAP
+- DIRECTION
+- DENSITY
+- CLS
+- BITMAP
+- SELFTEST: This triggers the test print, the printer generates when hitting the power button once. 
+- PRINT x: Prints x copies of the label
+- BAR: prints only a completely black label
+- BARCODE: might do something, but doesn't correspond to the TSPL2 syntax. I saw it print a slightly messy black bar. I skipped all other barcode commands, after checking if QRCODE works. It doesn't. 
+
 
 The printer also exposes a serial USB connection to the PC but only returns `ERROR0` on any command. 
 
