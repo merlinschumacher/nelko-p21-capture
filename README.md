@@ -1,22 +1,23 @@
 # nelko-p21-capture
 This is a capture of the bluetooth traffic of a Nelko P21 label printer
 
-It contains a connection and a print of the default template on a 14x40mm label. The printer itself uses some proprietary commands like:
+It contains a connection and a print of the default template on a 14x40mm label. The entire communication of the printer runs via SPP/RFCOMM aka a serial connection over Bluetooth.
+
+The printer itself uses some proprietary commands like the following. Every command must be followed by a CRLF as is every response. 
 - `BATTERY?`  
-  Responds with: `BATTERY ` followed by two bytes. 
-  In this capture it's 0x99 and 0x00. It was charged more than 99% at this point, I believe.
+  Responds with: `BATTERY ` followed by two bytes. The first byte is most likely the charge level in percent.
 - `CONFIG?` 
-  Responds with: `CONFIG ` followed by `00cb00000304020402010d0a`. 
+  Responds with: `CONFIG ` followed by something like `00cb0000030402040201`. 
   The first byte may indicate some protocol type, in this case TSPL2 and the second to the DPI resolution of 203 (CB).
-  000003 corresponds to the first firmware version in the app (0.3.0).
-  040204 corresponds to the second firmware version in the app (4.2.4).
-  0201 at the end is unknown. It might be the automatic timeout and the beep feature.
+  The next three bytes `00 00 03` corresponds to the first firmware version in the app (0.3.0).
+  The three bytes after that `04 02 04` corresponds to the second firmware version in the app (4.2.4).
+  Then comes one byte containing the timeout setting: `00` to `03` for never, 15 min, 30 min, 60 min.
+  The last byte is the status of the beep setting.
+- `BEEP` followed by a space and 0x00 or 0x01. 
 - `[ESC]!o`  
   According to the TSPL2 documentation this cancels the pause status of the printer. The command is sent repeatedly from the app to the printer and the printer answers with a short status.
 - `[ESC]!?`
   Seems to return the ready status for the printer.
- 
-  
 
 The sent printing commands correspond to parts of TSPL2:
 ```
@@ -40,7 +41,8 @@ It only supports a subset of TSPL2 commands like:
 - SELFTEST: This triggers the test print, the printer generates when hitting the power button once. 
 - PRINT x: Prints x copies of the label
 - BAR: prints only a completely black label
-- BARCODE: might do something, but doesn't correspond to the TSPL2 syntax. I saw it print a slightly messy black bar. I skipped all other barcode commands, after checking if QRCODE works. It doesn't. 
+- BARCODE: might do something, but doesn't correspond to the TSPL2 syntax. I saw it print a slightly messy black bar. I skipped all other barcode commands, after checking if QRCODE works. It doesn't.
+- INITIALPRINTER: Triggers a factory reset.
 
 
 The printer also exposes a serial USB connection to the PC but only returns `ERROR0` on any command. 
