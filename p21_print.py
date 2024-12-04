@@ -1,9 +1,8 @@
-#!/bin/python
 import serial
 import struct
-from PIL import Image, ImageDraw
+import argparse
+from PIL import Image, ImageEnhance, ImageOps
 from packaging.version import Version
-
 
 class BatteryData:
     def __init__(self, data):
@@ -98,47 +97,42 @@ class DeviceConfig:
             f"Beep: {BeepString(self.beep_setting)}"
         )
 
+def load_image(image):
+    # Load the image
+    image = Image.open(image)
+    image = ImageOps.grayscale(image)
+    image = ImageOps.autocontrast(image)
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(2)
 
-def convert_image_to_2bit(image):
-    # Open the image
+    # Rotate the image to its longer side
+    if image.width > image.height:
+        image = image.rotate(90, expand=True)
+
+    #pal = image.quantize(2)
     
-    # Convert the image to 2-bit grayscale using dithering
-    image = image.convert('L')
-    image = image.point(lambda p: p // 64 * 64)  # Reduce to 4 levels (0, 64, 128, 192)
+    # Resize the image to 106x314 pixels although the printer only prints 
+    # print 96x284 pixels. The printer has non-square pixels, so we
+    # need stretch the image to make it look right.
+    #image= image.resize((106, 324), Image.NEAREST)
+    image.thumbnail((96, 284), Image.NEAREST)
+
+
+
+    #image = image.quantize(colors=2, palette=pal, dither=Image.FILTERED)
+    image = image.convert('1', dither=Image.FLOYDSTEINBERG)
+    image.save("test.png")
+
+    # Convert the image to a bit array
+    bitdata = image.tobytes()
+
+    # Pad the bit array to 3408 bytes, so the printe doesnt print black garbage
+    if len(bitdata) < 3408:
+       bitdata = bitdata.ljust(3408- len(bitdata), b"\xff")
+
+    return bitdata
     
-    # Get the image data
-    pixels = image.getdata()
     
-    # Pack pixels into bytes (4 pixels per byte) in MSB order
-    packed_data = bytearray()
-    byte = 0
-    bit_count = 0
-    
-    for pixel in pixels:
-        # Convert pixel to 2-bit value
-        if pixel < 64:
-            value = 0
-        elif pixel < 128:
-            value = 1
-        elif pixel < 192:
-            value = 2
-        else:
-            value = 3
-        
-        # Pack the 2-bit value into the byte in MSB order
-        byte |= (value << (6 - bit_count * 2))
-        bit_count += 1
-        
-        if bit_count == 4:
-            packed_data.append(byte)
-            byte = 0
-            bit_count = 0
-    
-    # Append the last byte if there are remaining bits
-    if bit_count > 0:
-        packed_data.append(byte)
-    
-    return packed_data
 
 def get_config():
     data = get_data("CONFIG?")
@@ -178,10 +172,9 @@ def get_data(command):
         return
 
 
-def send_print_data(data):
+def send_print_command(data, device):
     try:
-        with serial.Serial("/dev/rfcomm0", 115200, timeout=1) as ser:
-            print(f"Sending {len(data)} of bytes to the printer")
+        with serial.Serial(device, 115200, timeout=1) as ser:
             ser.write(data)
             in_bin = ser.readline()
             in_hex = in_bin.hex()
@@ -191,50 +184,40 @@ def send_print_data(data):
         return
 
 
-def build_serial_data(imagedata):
-    serial_data = """\033!o\r\n
+def build_print_command(imagedata, density, copies):
+    serial_data = f"""\033!o\r\n
    SIZE 14.0 mm,40.0 mm\r\n
 GAP 5.0 mm,0 mm\r\n
-DIRECTION 0,0\r\n
-DENSITY 15\r\n
+DIRECTION 1,1\r\n
+DENSITY {density}\r\n
 CLS\r\n
 BITMAP 0,0,12,284,1,""".encode()
     serial_data += imagedata
 
-    serial_data += """\r\n
-PRINT 1\r\n""".encode()
+    serial_data += f"""\r\n
+PRINT {copies}\r\n""".encode()
     return serial_data
 
-def draw_diagonal_lines(width, height):
-    # Create a new image with white background
-    image = Image.new('L', (width, height), 255)
-    draw = ImageDraw.Draw(image)
-    
-    # Draw 45-degree diagonal lines
-    for x in range(0, width, 4):
-        draw.line((x, 0, 0, x), fill=0)
-        draw.line((width - x, height, width, height - x), fill=0)
-    
-    for y in range(0, height, 4):
-        draw.line((0, y, y, 0), fill=0)
-        draw.line((width, height - y, width - y, height), fill=0)
-    
-    return image
-
 def main():
-    print("Printer configuration:")
-    print(get_config())
-    print("Printer battery:")
-    print(get_battery())
-    image = Image.open("nelko_test_image.bmp")
-    #image = draw_diagonal_lines(48, 284)
-    bitdata = convert_image_to_2bit(image)
+    parser = argparse.ArgumentParser(description="Print an image on a P21 printer.")
+    parser.add_argument("--device", help="The device to print to (defaults to /dev/rfcomm0)", default="/dev/rfcomm0")
+    parser.add_argument("--image", help="The image file to print.")
+    parser.add_argument("--density", help="The density/darkness of the print (1-15, defaults to 15)", type=int, default=15)
+    parser.add_argument("--copies", help="The number of copies to print", type=int, default=1)
+    parser.add_argument("--config", help="Get the printer configuration", action="store_true")
+    parser.add_argument("--battery", help="Get the printer battery level", action="store_true")
+    args = parser.parse_args()
 
-    if len(bitdata) < 3408:
-        bitdata = bitdata.ljust(3408- len(bitdata), b"\xff")
-
-    send_print_data(build_serial_data(bitdata))
-
+    if args.image:
+        bitdata = load_image(args.image)
+        print_command = build_print_command(bitdata, args.density, args.copies)
+        send_print_command(print_command, args.device)
+    if args.config:
+        print("Printer configuration:")
+        print(get_config())
+    if args.battery:
+        print("Printer battery status:")
+        print(get_battery())
 
 if __name__ == "__main__":
     main()

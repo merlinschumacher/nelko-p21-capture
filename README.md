@@ -20,7 +20,8 @@ The printer itself uses some proprietary commands like the following. Every comm
   Seems to return the ready status for the printer.
 
 The sent printing commands correspond to parts of TSPL2:
-```
+
+```plaintext
 SIZE 14.0 mm,40.0 mm
 GAP 5.0 mm,0 mm
 DIRECTION 0,0
@@ -32,20 +33,21 @@ BITMAP 0,0,12,284,1,?????AT???GuC??
 
 It only supports a subset of TSPL2 commands like:
 
-- SIZE
-- GAP
-- DIRECTION
-- DENSITY
-- CLS
-- BITMAP
-- SELFTEST: This triggers the test print, the printer generates when hitting the power button once. 
+- SIZE: Sets the size of the labels.
+- GAP: Sets the gap between the labels.
+- DIRECTION: Controls the print direction. In case of the P21 it doesn't seem to change anything.
+- DENSITY: Controls the print density/darkness of the print.
+- CLS: Clears the print canvas.
+- BITMAP: Prints an image and takes the parameters Xpos, YPos, height in bytes, width in dots.
+- SELFTEST: This triggers the test print, the printer generates when hitting the power button once.
 - PRINT x: Prints x copies of the label
 - BAR: prints only a completely black label
 - BARCODE: might do something, but doesn't correspond to the TSPL2 syntax. I saw it print a slightly messy black bar. I skipped all other barcode commands, after checking if QRCODE works. It doesn't.
 - INITIALPRINTER: Triggers a factory reset.
 
+The image format is 96x284 pixels in 1 bit color depth as raw data. Every bit is a pixel there are no checksums or error correction data.
 
-The printer also exposes a serial USB connection to the PC but only returns `ERROR0` on any command. 
+The printer also exposes a serial USB connection to the PC but only returns `ERROR0` on any command.
 
 Internally it uses a JieLi AC6951C (or similiar) bluetooth chip (see https://github.com/kagaimiq/jielie/pull/6).
 
