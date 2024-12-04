@@ -109,19 +109,12 @@ def load_image(image):
     if image.width > image.height:
         image = image.rotate(90, expand=True)
 
-    #pal = image.quantize(2)
-    
     # Resize the image to 106x314 pixels although the printer only prints 
     # print 96x284 pixels. The printer has non-square pixels, so we
     # need stretch the image to make it look right.
     #image= image.resize((106, 324), Image.NEAREST)
     image.thumbnail((96, 284), Image.NEAREST)
-
-
-
-    #image = image.quantize(colors=2, palette=pal, dither=Image.FILTERED)
     image = image.convert('1', dither=Image.FLOYDSTEINBERG)
-    image.save("test.png")
 
     # Convert the image to a bit array
     bitdata = image.tobytes()
